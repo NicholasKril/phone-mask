@@ -1,0 +1,14 @@
+{
+  "name": "phonemask",
+  "version": "1.0.0",
+  "description": "Smart phone input formatter with caret control",
+  "main": "dist/phone-mask.js",
+  "license": "MIT",
+  "keywords": [
+	"phone",
+	"input",
+	"mask",
+	"formatter",
+	"caret"
+  ]
+}

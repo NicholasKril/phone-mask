@@ -1,402 +1,200 @@
-/*!
- * PhoneMask
- * Lightweight phone number formatter with live hint overlay,
- * country detection and dynamic data attributes.
- *
- * Features:
- *  - Automatic country detection by dial code
- *  - Live formatting while typing
- *  - Smart Backspace handling (digits + separators)
- *  - Hint overlay with remaining mask
- *  - data-length / data-country attributes
- *
- * Author: Nicholas Kril
- * GitHub: https://github.com/NicholasKril/phonemask
- * License: MIT
- * Version: 1.0.0
- */
-
-(function (window, document) {
-
-	/* ==========================================================
-	 * GLOBAL CONSTANTS
-	 * ========================================================== */
-
-	// Default max length when country is not detected
-	const DEFAULT_MAX = '15';
-
-	// Generic fallback mask
-	const DEFAULT_MASK = '+_______________';
-
-	// RegExp helpers for performance & readability
-	const SEP_REGEX = /[\s\-()]/; // space, dash, parentheses
-	const DIGIT_REGEX = /\d/;
-
-	/* ==========================================================
-	 * PUBLIC API
-	 * ========================================================== */
-
-	/**
-	 * PhoneMask global object
-	 * Allows manual initialization on any selector
-	 */
-	const PhoneMask = {
-		init(selector = 'input[type="tel"]') {
-			document.querySelectorAll(selector).forEach(input => {
-				// Prevent double initialization
-				if (!input.__phoneMaskAttached) {
-					input.__phoneMaskAttached = true;
-					initPhoneField(input);
-				}
-			});
-		}
-	};
-
-	/* ==========================================================
-	 * CORE INITIALIZER
-	 * ========================================================== */
-
-	/**
-	 * Initializes a single phone input field
-	 * @param {HTMLInputElement} phoneInput
-	 */
-	function initPhoneField(phoneInput) {
-
-		const field = phoneInput.parentElement;
-		if (!field) return;
-
-		/* ================== DATA ATTRIBUTES ================== */
-
-		// Default state before country detection
-		phoneInput.dataset.length = DEFAULT_MAX;
-		phoneInput.dataset.country = '';
-
-		/* ================== HINT ELEMENT ================== */
-
-		// Reuse existing hint or create a new one
-		let hint = field.querySelector('.phone-hint');
-		if (!hint) {
-			hint = document.createElement('span');
-			hint.className = 'phone-hint';
-			phoneInput.after(hint);
-		}
-
-		/* ================== INTERNAL FLAGS ================== */
-
-		// Prevent recursive formatting
-		let isFormatting = false;
-
-		// Used to bypass input handler after manual Backspace logic
-		let isDeleting = false;
-
-		/* ================== PHONE RULES ================== */
-		/* Each rule defines:
-		 * - country code
-		 * - dial prefix
-		 * - max digit count
-		 * - digit grouping
-		 * - visual mask
-		 * - formatting template
-		 */
-
-		const PHONE_RULES = [
-			{code:'AF',dial:'93',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'BD',dial:'880',maxDigits:13,groups:[3,4,4],mask:'+{dial} ___ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'AZ',dial:'994',maxDigits:12,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'AM',dial:'374',maxDigits:11,groups:[2,3,3],mask:'+{dial} __ ___ ___',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'BY',dial:'375',maxDigits:12,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'BH',dial:'973',maxDigits:11,groups:[4,4],mask:'+{dial} ____ ____',format:'+{dial} {g1} {g2}'},
-			{code:'BT',dial:'975',maxDigits:10,groups:[3,4],mask:'+{dial} ___ ____',format:'+{dial} {g1} {g2}'},
-			{code:'BN',dial:'673',maxDigits:10,groups:[3,4],mask:'+{dial} ___ ____',format:'+{dial} {g1} {g2}'},
-			{code:'CF',dial:'236',maxDigits:11,groups:[2,4,4],mask:'+{dial} __ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'TD',dial:'235',maxDigits:11,groups:[2,4,4],mask:'+{dial} __ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'KM',dial:'269',maxDigits:10,groups:[3,4],mask:'+{dial} ___ ____',format:'+{dial} {g1} {g2}'},
-			{code:'CV',dial:'238',maxDigits:11,groups:[2,4,4],mask:'+{dial} __ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'AL',dial:'355',maxDigits:12,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'DZ',dial:'213',maxDigits:12,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'AO',dial:'244',maxDigits:12,groups:[3,3,3],mask:'+{dial} ___ ___ ___',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'AR',dial:'54',maxDigits:13,groups:[2,4,4],mask:'+{dial} __ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'AU',dial:'61',maxDigits:11,groups:[1,4,4],mask:'+{dial} _ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'AT',dial:'43',maxDigits:11,groups:[3,4,4],mask:'+{dial} ___ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'BE',dial:'32',maxDigits:11,groups:[3,3,3],mask:'+{dial} ___ ___ ___',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'BJ',dial:'229',maxDigits:11,groups:[2,4,4],mask:'+{dial} __ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'BO',dial:'591',maxDigits:11,groups:[2,4,4],mask:'+{dial} __ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'BA',dial:'387',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'BR',dial:'55',maxDigits:13,groups:[2,4,4],mask:'+{dial} __ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'BG',dial:'359',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'CM',dial:'237',maxDigits:11,groups:[2,4,4],mask:'+{dial} __ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'CA',dial:'1',maxDigits:11,groups:[3,3,4],mask:'+{dial} ___ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'CN',dial:'86',maxDigits:13,groups:[3,4,4],mask:'+{dial} ___ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'CO',dial:'57',maxDigits:12,groups:[3,4,4],mask:'+{dial} ___ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'HR',dial:'385',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'CU',dial:'53',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'CY',dial:'357',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'CZ',dial:'420',maxDigits:12,groups:[3,3,3],mask:'+{dial} ___ ___ ___',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'DK',dial:'45',maxDigits:10,groups:[4,4],mask:'+{dial} ____ ____',format:'+{dial} {g1} {g2}'},
-			{code:'EE',dial:'372',maxDigits:11,groups:[3,4,4],mask:'+{dial} ___ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'FI',dial:'358',maxDigits:12,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'FR',dial:'33',maxDigits:11,groups:[1,2,2,2,2],mask:'+{dial} _ __ __ __ __',format:'+{dial} {g1} {g2} {g3} {g4} {g5}'},
-			{code:'DE',dial:'49',maxDigits:13,groups:[3,4,4],mask:'+{dial} ___ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'GR',dial:'30',maxDigits:11,groups:[3,4,4],mask:'+{dial} ___ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'HU',dial:'36',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'IE',dial:'353',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'IL',dial:'972',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'IT',dial:'39',maxDigits:11,groups:[3,4,4],mask:'+{dial} ___ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'JP',dial:'81',maxDigits:11,groups:[2,4,4],mask:'+{dial} __ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'LV',dial:'371',maxDigits:11,groups:[3,4,4],mask:'+{dial} ___ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'LT',dial:'370',maxDigits:11,groups:[3,4,4],mask:'+{dial} ___ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'LU',dial:'352',maxDigits:11,groups:[3,4,4],mask:'+{dial} ___ ____ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'MD',dial:'373',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'ME',dial:'382',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'NL',dial:'31',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'NO',dial:'47',maxDigits:10,groups:[4,4],mask:'+{dial} ____ ____',format:'+{dial} {g1} {g2}'},
-			{code:'PL',dial:'48',maxDigits:11,groups:[3,3,3],mask:'+{dial} ___ ___ ___',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'PT',dial:'351',maxDigits:11,groups:[3,3,3],mask:'+{dial} ___ ___ ___',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'RO',dial:'40',maxDigits:11,groups:[3,3,3],mask:'+{dial} ___ ___ ___',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'RS',dial:'381',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'SK',dial:'421',maxDigits:12,groups:[3,3,3],mask:'+{dial} ___ ___ ___',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'SI',dial:'386',maxDigits:11,groups:[2,3,4],mask:'+{dial} __ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'ES',dial:'34',maxDigits:11,groups:[3,3,3],mask:'+{dial} ___ ___ ___',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'SE',dial:'46',maxDigits:11,groups:[3,3,3],mask:'+{dial} ___ ___ ___',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'CH',dial:'41',maxDigits:11,groups:[3,3,3],mask:'+{dial} ___ ___ ___',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'TR',dial:'90',maxDigits:11,groups:[3,3,4],mask:'+{dial} ___ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'UA',dial:'38',localPrefix:'0',maxDigits:12,groups:[3,3,2,2],mask:'+{dial} (___) ___-__-__',format:'+{dial} ({g1}) {g2}-{g3}-{g4}'},
-			{code:'GB',dial:'44',maxDigits:11,groups:[4,3,4],mask:'+{dial} ____ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'US',dial:'1',maxDigits:11,groups:[3,3,4],mask:'+{dial} ___ ___ ____',format:'+{dial} {g1} {g2} {g3}'},
-			{code:'CA',dial:'1',maxDigits:11,groups:[3,3,4],mask:'+{dial} ___ ___ ____',format:'+{dial} {g1} {g2} {g3}'}
-		];
-
-		/* ==========================================================
-		 * HELPERS
-		 * ========================================================== */
-
-		/**
-		 * Extract digits from any string
-		 */
-		const getDigits = v => v.replace(/\D/g, '');
-
-		/**
-		 * Detect active country rule by dial prefix
-		 */
-		function getActiveRule(value) {
-			const digits = getDigits(value);
-			for (const rule of PHONE_RULES) {
-				if (rule.localPrefix && digits.startsWith(rule.localPrefix)) return rule;
-				if (digits.startsWith(rule.dial)) return rule;
-			}
-			return null;
-		}
-
-		/**
-		 * Calculate caret position after the last visible digit
-		 * Ensures caret never jumps inside formatting characters
-		 */
-		function caretAfterLastDigit(value) {
-			for (let i = value.length - 1; i >= 0; i--) {
-				if (DIGIT_REGEX.test(value[i])) return i + 1;
-			}
-			return value.length;
-		}
-
-		/* ==========================================================
-		 * FORMATTER
-		 * ========================================================== */
-
-		/**
-		 * Format phone value according to detected rule
-		 */
-		function formatPhone(value) {
-			if (!value) return '';
-			if (value === '+') return '+';
-
-			let digits = getDigits(value);
-			if (!digits) return value.startsWith('+') ? '+' : '';
-
-			const rule = getActiveRule(value);
-			if (!rule) return '+' + digits.slice(0, DEFAULT_MAX);
-
-			// Convert local prefix (e.g. 0) to international dial
-			if (rule.localPrefix && digits.startsWith(rule.localPrefix)) {
-				digits = rule.dial + digits;
-			}
-
-			digits = digits.slice(0, rule.maxDigits);
-
-			let rest = digits.slice(rule.dial.length);
-			let pos = 0;
-
-			// Split digits into defined groups
-			const groups = rule.groups.map(size => {
-				const part = rest.slice(pos, pos + size);
-				pos += size;
-				return part;
-			});
-
-			// Build formatted output
-			let out = rule.format.replace('{dial}', rule.dial);
-			groups.forEach((g, i) => {
-				out = out.replace(`{g${i + 1}}`, g || '');
-			});
-
-			// Trim trailing separators
-			return out.replace(/[()\-\s]+$/, '');
-		}
-
-		/**
-		 * Apply formatting while preserving caret position
-		 */
-		function applyFormat() {
-			if (isFormatting || isDeleting) return;
-
-			isFormatting = true;
-
-			const start = phoneInput.selectionStart;
-			const oldValue = phoneInput.value;
-			const newValue = formatPhone(oldValue);
-
-			if (oldValue !== newValue) {
-				const diff = newValue.length - oldValue.length;
-				phoneInput.value = newValue;
-				phoneInput.setSelectionRange(start + diff, start + diff);
-			}
-
-			isFormatting = false;
-		}
-
-		/* ==========================================================
-		 * HINT ENGINE
-		 * ========================================================== */
-
-		/**
-		 * Update hint overlay and data attributes
-		 */
-		function updatePhoneHint() {
-			const value = phoneInput.value;
-			const focused = document.activeElement === phoneInput;
-
-			// Empty & blurred
-			if (!value && !focused) {
-				hint.innerHTML = '';
-				phoneInput.style.color = 'transparent';
-				phoneInput.dataset.length = DEFAULT_MAX;
-				phoneInput.dataset.country = '';
-				return;
-			}
-
-			// Empty but focused
-			if (!value && focused) {
-				hint.innerHTML = `<span class="hint-remaining">${DEFAULT_MASK}</span>`;
-				phoneInput.style.color = 'transparent';
-				phoneInput.dataset.length = DEFAULT_MAX;
-				phoneInput.dataset.country = '';
-				return;
-			}
-
-			const display = formatPhone(value);
-			const rule = getActiveRule(display);
-
-			// Unknown country fallback
-			if (!rule) {
-				const val = value.startsWith('+') ? value : '+' + getDigits(value);
-				hint.innerHTML =
-					`<span class="hint-entered">${val}</span>` +
-					`<span class="hint-remaining">${DEFAULT_MASK.slice(val.length)}</span>`;
-				phoneInput.dataset.length = DEFAULT_MAX;
-				phoneInput.dataset.country = '';
-				phoneInput.style.color = 'transparent';
-				return;
-			}
-
-			// Country detected
-			phoneInput.dataset.length = rule.maxDigits;
-			phoneInput.dataset.country = rule.code;
-
-			const mask = rule.mask.replace('{dial}', rule.dial);
-			hint.innerHTML =
-				`<span class="hint-entered">${display}</span>` +
-				`<span class="hint-remaining">${mask.slice(display.length)}</span>`;
-		}
-
-		/* ==========================================================
-		 * EVENTS
-		 * ========================================================== */
-
-		/**
-		 * Custom Backspace logic:
-		 * removes digit together with preceding separator
-		 */
-		phoneInput.addEventListener('keydown', e => {
-
-			if (e.key !== 'Backspace') {
-				isDeleting = false;
-				return;
-			}
-
-			const pos = phoneInput.selectionStart;
-			const value = phoneInput.value;
-
-			// Allow deleting leading "+"
-			if (pos === 1 && value[0] === '+') {
-				e.preventDefault();
-				phoneInput.value = '';
-				updatePhoneHint();
-				isDeleting = true;
-				return;
-			}
-
-			if (pos === 0) return;
-
-			e.preventDefault();
-
-			let start = pos - 1;
-
-			// Remove separator together with digit
-			if (SEP_REGEX.test(value[start])) start--;
-			if (start >= 0 && DIGIT_REGEX.test(value[start])) start--;
-
-			const newValue = value.slice(0, start + 1) + value.slice(pos);
-			const formatted = formatPhone(newValue);
-
-			phoneInput.value = formatted;
-			phoneInput.setSelectionRange(
-				caretAfterLastDigit(formatted),
-				caretAfterLastDigit(formatted)
-			);
-
-			updatePhoneHint();
-			isDeleting = true;
-		});
-
-		phoneInput.addEventListener('input', () => {
-			if (isDeleting) {
-				isDeleting = false;
-				return;
-			}
-			applyFormat();
-			updatePhoneHint();
-		});
-
-		phoneInput.addEventListener('paste', () => {
-			setTimeout(() => {
-				applyFormat();
-				updatePhoneHint();
-			}, 0);
-		});
-
-		phoneInput.addEventListener('focus', () => {
-			setTimeout(() => {
-				applyFormat();
-				updatePhoneHint();
-			}, 0);
-		});
-
-		phoneInput.addEventListener('blur', updatePhoneHint);
-	}
-
-	/* ==========================================================
-	 * EXPORT
-	 * ========================================================== */
-
-	window.PhoneMask = PhoneMask;
-
-})(window, document);
+import { format, parse, getCountries, normalize, resolveOptions } from './core.js';
+
+export { format, parse, getCountries };
+const instances = new WeakMap();
+const attributes = ['data-country', 'data-length', 'data-phone-possible', 'inputmode'];
+const isDigit = (char) => /\d/.test(char || '');
+const tokens = (text) => normalize(text).replace(/[^\d+]/g, '').length;
+
+function caretAt(value, count) {
+  if (count <= 0) return 0;
+  let seen = 0;
+  for (let i = 0; i < value.length; i++) {
+    if (/[\d+]/.test(value[i]) && ++seen === count) return i + 1;
+  }
+  return value.length;
+}
+
+/** Attach once. Use destroy() before changing options. */
+export function attach(input, options = {}) {
+  if (!input || input.tagName !== 'INPUT' || !['tel', 'text', 'search'].includes(input.type)) {
+    throw new TypeError('PhoneMask.attach expects an input of type tel, text, or search');
+  }
+  if (instances.has(input)) return instances.get(input);
+  const settings = resolveOptions(options);
+  const doc = input.ownerDocument;
+  const view = doc.defaultView;
+  const original = new Map(attributes.map((name) => [name, input.getAttribute(name)]));
+  const listeners = [];
+  let state;
+  let composing = false;
+  let destroyed = false;
+  let resetTimer;
+  let deferredDeletion;
+  let hint;
+  let hintText;
+  let hintEntered;
+
+  // A separate, optional hint never hides or replaces the actual input text.
+  if (settings.hint !== false) {
+    hint = doc.createElement('span');
+    hint.className = 'phone-hint';
+    hint.setAttribute('aria-hidden', 'true');
+    hintEntered = doc.createElement('span');
+    hintEntered.className = 'hint-entered';
+    hintEntered.style.visibility = 'hidden';
+    hintText = doc.createElement('span');
+    hintText.className = 'hint-remaining';
+    hint.append(hintEntered, hintText);
+    input.after(hint);
+  }
+  if (!input.hasAttribute('inputmode')) input.setAttribute('inputmode', 'tel');
+
+  function listen(target, name, handler) {
+    target.addEventListener(name, handler);
+    listeners.push(() => target.removeEventListener(name, handler));
+  }
+
+  function paintHint() {
+    if (!hint) return;
+    const focused = (input.getRootNode().activeElement || doc.activeElement) === input;
+    hint.hidden = !focused || input.scrollLeft !== 0 || (!input.value && Boolean(input.placeholder));
+    hintEntered.textContent = state.formatted;
+    hintText.textContent = state.hint;
+  }
+
+  function apply(preserveSelection = true, notify = false) {
+    if (destroyed || composing) return state;
+    const previous = input.value;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const direction = input.selectionDirection;
+    state = parse(previous, settings);
+    if (previous !== state.formatted) {
+      input.value = state.formatted;
+      if (preserveSelection && start !== null && end !== null) {
+        const delta = tokens(state.formatted) - tokens(previous);
+        const map = (position) => position === 0 ? 0 : caretAt(state.formatted,
+          Math.max(0, tokens(previous.slice(0, position)) + delta));
+        input.setSelectionRange(map(start), map(end), direction || 'none');
+      }
+    }
+    input.dataset.country = state.country;
+    input.dataset.length = String(state.maxDigits);
+    input.dataset.phonePossible = String(state.isPossible);
+    paintHint();
+    if (notify) {
+      const detail = { ...state };
+      input.dispatchEvent(new view.CustomEvent('phonemask:change', { detail, bubbles: true, composed: true }));
+      settings.onChange?.(detail, input);
+    }
+    return { ...state };
+  }
+
+  function emitInput(inputType) {
+    input.dispatchEvent(new view.InputEvent('input', { bubbles: true, composed: true, inputType }));
+  }
+
+  function deleteAcrossSeparator(event, backward) {
+    if (destroyed || composing || event.isComposing || input.readOnly || input.disabled || event.defaultPrevented) return;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    if (start === null || start !== end) return;
+    const value = input.value;
+    let index = backward ? start - 1 : start;
+    if (index < 0 || index >= value.length || isDigit(value[index]) || value[index] === '+') return;
+    while (index >= 0 && index < value.length && !isDigit(value[index])) index += backward ? -1 : 1;
+    if (index < 0 || index >= value.length) return;
+    const from = backward ? index : start;
+    const to = backward ? start : index + 1;
+    if (!event.cancelable) {
+      deferredDeletion = { value, from, to };
+      return;
+    }
+    event.preventDefault();
+    input.value = value.slice(0, from) + value.slice(to);
+    input.setSelectionRange(from, from);
+    emitInput(backward ? 'deleteContentBackward' : 'deleteContentForward');
+  }
+
+  listen(input, 'beforeinput', (event) => {
+    deferredDeletion = undefined;
+    if (event.inputType === 'deleteContentBackward' || event.inputType === 'deleteContentForward') {
+      deleteAcrossSeparator(event, event.inputType === 'deleteContentBackward');
+    }
+  });
+  if (!('onbeforeinput' in input)) {
+    listen(input, 'keydown', (event) => {
+      if (!event.ctrlKey && !event.metaKey && !event.altKey && ['Backspace', 'Delete'].includes(event.key)) {
+        deleteAcrossSeparator(event, event.key === 'Backspace');
+      }
+    });
+  }
+  listen(input, 'input', (event) => {
+    const deletion = deferredDeletion;
+    deferredDeletion = undefined;
+    if (composing || event.isComposing) return;
+    // Some virtual keyboards deliver non-cancelable beforeinput events.
+    if (deletion && !input.readOnly && !input.disabled &&
+        input.value.replace(/\D/g, '') === deletion.value.replace(/\D/g, '')) {
+      input.value = deletion.value.slice(0, deletion.from) + deletion.value.slice(deletion.to);
+      input.setSelectionRange(deletion.from, deletion.from);
+    }
+    apply(true, true);
+  });
+  listen(input, 'change', () => apply(true, true));
+  listen(input, 'compositionstart', () => { composing = true; });
+  listen(input, 'compositionend', () => { composing = false; apply(true, true); });
+  listen(input, 'focus', () => apply());
+  listen(input, 'blur', paintHint);
+  listen(input, 'scroll', paintHint);
+  if (input.form) {
+    listen(input.form, 'reset', (event) => {
+      view.clearTimeout(resetTimer);
+      resetTimer = view.setTimeout(() => { if (!event.defaultPrevented) apply(false, true); }, 0);
+    });
+  }
+
+  const controller = {
+    input,
+    getValue: () => ({ ...state }),
+    setValue(value, { emit = false } = {}) {
+      if (destroyed) throw new Error('PhoneMask: this controller has been destroyed');
+      input.value = String(value ?? '');
+      composing = false;
+      apply(false);
+      if (emit) emitInput('insertReplacementText');
+      return { ...state };
+    },
+    refresh: () => apply(),
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      view.clearTimeout(resetTimer);
+      listeners.forEach((remove) => remove());
+      hint?.remove();
+      original.forEach((value, name) => value === null ? input.removeAttribute(name) : input.setAttribute(name, value));
+      instances.delete(input);
+    },
+  };
+  instances.set(input, controller);
+  apply(false);
+  return controller;
+}
+
+export function init(target = 'input[type="tel"]', options = {}) {
+  if (typeof target === 'string') {
+    const root = options.root || (typeof document !== 'undefined' ? document : undefined);
+    if (!root) return [];
+    target = root.querySelectorAll(target);
+  }
+  if (target?.tagName === 'INPUT') return [attach(target, options)];
+  return Array.from(target || [], (input) => attach(input, options));
+}
+
+export function destroy(target) {
+  instances.get(target)?.destroy();
+}
+
+const PhoneMask = { init, attach, destroy, format, parse, getCountries };
+export default PhoneMask;

@@ -1,14 +1,78 @@
 {
   "name": "phonemask",
-  "version": "1.0.0",
-  "description": "Smart phone input formatter with caret control",
-  "main": "dist/phone-mask.js",
+  "version": "2.0.0",
+  "description": "Cross-platform phone input formatting with international metadata, caret control, and accessible hints",
+  "main": "./dist/phone-mask.cjs",
   "license": "MIT",
   "keywords": [
-	"phone",
-	"input",
-	"mask",
-	"formatter",
-	"caret"
+    "phone",
+    "input",
+    "mask",
+    "formatter",
+    "caret"
+  ],
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "esbuild": "0.28.2",
+    "libphonenumber-js": "1.13.15",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "typescript": "7.0.2",
+    "vue": "3.5.43"
+  },
+  "type": "module",
+  "module": "./dist/phone-mask.mjs",
+  "types": "./dist/phone-mask.d.ts",
+  "unpkg": "./dist/phone-mask.min.js",
+  "jsdelivr": "./dist/phone-mask.min.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NicholasKril/phone-mask.git"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "npm run build && node --test test/core.test.mjs",
+    "test:browser": "playwright test",
+    "test:types": "tsc -p test/types/tsconfig.json && tsc -p test/types/tsconfig.core.json",
+    "check": "npm test && npm run test:types && npm run test:browser",
+    "prepack": "npm run build",
+    "prepare": "npm run build"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/phone-mask.d.ts",
+        "default": "./dist/phone-mask.mjs"
+      },
+      "require": {
+        "types": "./dist/phone-mask.d.cts",
+        "default": "./dist/phone-mask.cjs"
+      }
+    },
+    "./core": {
+      "import": {
+        "types": "./dist/core.d.ts",
+        "default": "./dist/core.mjs"
+      },
+      "require": {
+        "types": "./dist/core.d.cts",
+        "default": "./dist/core.cjs"
+      }
+    },
+    "./style.css": "./dist/phone-mask.css",
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": [
+    "./dist/phone-mask.js",
+    "./dist/phone-mask.min.js",
+    "./dist/phone-mask.css"
   ]
 }

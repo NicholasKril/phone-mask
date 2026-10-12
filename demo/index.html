@@ -1,128 +1,96 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="uk">
 <head>
-	<meta charset="UTF-8">
-	<title>PhoneMask Demo</title>
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-	<style>
-		body {
-			font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, sans-serif;
-			background: #f4f6fb;
-			padding: 40px;
-		}
-
-		h1 {
-			margin-bottom: 8px;
-		}
-
-		p {
-			color: #555;
-			margin-bottom: 24px;
-		}
-
-		.demo-block {
-			max-width: 420px;
-			background: #fff;
-			padding: 24px;
-			border-radius: 12px;
-			box-shadow: 0 10px 30px rgba(0,0,0,.08);
-		}
-
-		.phone-field {
-			position: relative;
-			margin-top: 20px;
-			margin-right: 30px;
-		}
-
-		.phone-field input,
-		.phone-hint {
-			font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, sans-serif;
-			font-size: 16px;
-			font-weight: 400;
-			line-height: 1.2;
-			letter-spacing: 1.2px;
-		}
-		
-		/* Input */
-		.phone-field input {
-			width: 100%;
-			padding: 14px 12px;
-			border-radius: 8px;
-			border: 1px solid #cbd5e1;
-			background: transparent;
-			color: transparent;
-			caret-color: #0f172a;
-			outline: none;
-		}
-		
-		.phone-field input:focus {
-			border-color: #6366f1;
-		}
-
-		.phone-hint {
-			position: absolute;
-			left: 12px;
-			top: 50%;
-			transform: translateY(-50%);
-			pointer-events: none;
-			white-space: pre;
-			color: #a1a5b7;
-		}
-
-		.phone-hint .hint-entered {
-			color: #1f2937;
-		}
-
-		.meta {
-			margin-top: 12px;
-			font-size: 13px;
-			color: #555;
-		}
-
-		.meta span {
-			display: inline-block;
-			margin-right: 12px;
-		}
-	</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PhoneMask 2 — перевірка введення</title>
+  <link rel="stylesheet" href="../dist/phone-mask.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 32px 20px; font: 16px/1.5 system-ui, sans-serif; color: #182b38; background: #f6f8fa; }
+    main { max-width: 640px; margin: auto; }
+    h1 { margin-bottom: 8px; }
+    p { color: #475569; }
+    form { background: white; border: 1px solid #cbd5e1; padding: 24px; border-radius: 8px; }
+    label { display: block; margin: 20px 0 6px; font-weight: 600; }
+    label:first-child { margin-top: 0; }
+    select, button { font: inherit; padding: 10px; }
+    select { width: 100%; }
+    .phone-field { font: 18px/1.5 ui-monospace, monospace; }
+    input:focus-visible, select:focus-visible, button:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+    button { margin-top: 20px; cursor: pointer; background: #182b38; color: white; border: 0; border-radius: 4px; }
+    button[type="reset"] { background: #e2e8f0; color: #182b38; }
+    dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 24px; }
+    dd { margin: 0; overflow-wrap: anywhere; font-family: ui-monospace, monospace; }
+    small { display: block; margin-top: 8px; color: #475569; }
+    #result { min-height: 1.5em; }
+    @media (max-width: 420px) { form { padding: 16px; } dl { grid-template-columns: 1fr; } dd { margin-bottom: 8px; } }
+  </style>
 </head>
 <body>
-
-	<h1>PhoneMask Demo</h1>
-	<p>Live phone number formatting with smart caret handling.</p>
-
-	<div class="demo-block">
-		<label for="phone">Phone number</label>
-
-		<div class="phone-field">
-			<input
-				type="tel"
-				id="phone"
-				placeholder=""
-				autocomplete="tel"
-			>
-		</div>
-
-		<div class="meta">
-			<span><strong>Country:</strong> <span id="country">—</span></span>
-			<span><strong>Max digits:</strong> <span id="length">—</span></span>
-		</div>
-	</div>
-
-	<script src="https://nicholaskril.github.io/phone-mask/src/phone-mask.js"></script>
-
-	<script>
-		PhoneMask.init();
-
-		const input = document.getElementById('phone');
-		const countryEl = document.getElementById('country');
-		const lengthEl = document.getElementById('length');
-
-		setInterval(() => {
-			countryEl.textContent = input.dataset.country || '—';
-			lengthEl.textContent = input.dataset.length || '—';
-		}, 200);
-	</script>
-
+<main>
+  <h1>PhoneMask 2</h1>
+  <p>Введіть або вставте номер. Спробуйте виділити кілька цифр чи відредагувати номер посередині.</p>
+  <form>
+    <label for="country">Країна для номера без «+»</label>
+    <select id="country">
+      <option value="">Міжнародний формат</option>
+      <option value="UA">Україна</option>
+      <option value="PL">Польща</option>
+      <option value="US">США</option>
+      <option value="CA">Канада</option>
+      <option value="GB">Велика Британія</option>
+    </select>
+    <label for="phone">Телефон</label>
+    <div class="phone-field">
+      <input id="phone" name="phone" type="tel" autocomplete="tel" aria-describedby="help">
+    </div>
+    <small id="help">Наприклад, +380501234567. Для номера 0501234567 виберіть Україну.</small>
+    <dl>
+      <dt>Визначена країна</dt><dd id="detected">—</dd>
+      <dt>Міжнародне значення</dt><dd id="international">—</dd>
+      <dt>Можлива довжина</dt><dd id="possible">Ні</dd>
+    </dl>
+    <button type="submit">Перевірити номер</button>
+    <button type="reset">Очистити</button>
+    <p id="result" role="status"></p>
+  </form>
+  <p><small>Демо працює локально: номер нікуди не надсилається. Можлива довжина не підтверджує існування номера.</small></p>
+</main>
+<script src="../dist/phone-mask.min.js"></script>
+<script>
+  const input = document.querySelector('#phone');
+  const country = document.querySelector('#country');
+  const result = document.querySelector('#result');
+  function render(value) {
+    document.querySelector('#detected').textContent = value.country || '—';
+    document.querySelector('#international').textContent = value.international || '—';
+    document.querySelector('#possible').textContent = value.isPossible ? 'Так' : 'Ні';
+    result.textContent = '';
+  }
+  function connect() {
+    const controller = PhoneMask.attach(input, { defaultCountry: country.value, onChange: render });
+    render(controller.getValue());
+    return controller;
+  }
+  let mask = connect();
+  country.addEventListener('change', () => {
+    const value = mask.getValue();
+    mask.destroy();
+    // Preserve a complete number when switching the interpretation country.
+    if (value.isPossible) input.value = value.international;
+    mask = connect();
+  });
+  input.form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const value = mask.getValue();
+    result.textContent = value.isPossible
+      ? 'Номер має можливу довжину: ' + value.international
+      : 'Перевірте код країни й кількість цифр.';
+  });
+  input.form.addEventListener('reset', () => {
+    setTimeout(() => { mask.destroy(); mask = connect(); }, 0);
+  });
+</script>
 </body>
 </html>

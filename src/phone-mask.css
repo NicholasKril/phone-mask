@@ -1,0 +1,33 @@
+/* Optional overlay. Keep the actual input text visible, including without JS. */
+.phone-field { position: relative; }
+.phone-field > input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #94a3b8;
+  font: inherit;
+  letter-spacing: normal;
+  direction: ltr;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+}
+.phone-field > .phone-hint {
+  position: absolute;
+  top: 50%;
+  left: calc(0.75rem + 1px);
+  right: 1px;
+  transform: translateY(-50%);
+  overflow: hidden;
+  white-space: pre;
+  pointer-events: none;
+  user-select: none;
+  font: inherit;
+  letter-spacing: normal;
+  direction: ltr;
+  text-align: left;
+  color: #64748b;
+}
+.phone-hint[hidden] { display: none; }
+.phone-hint .hint-entered { visibility: hidden; }
+@media (forced-colors: active) { .phone-hint { display: none; } }
